@@ -42,9 +42,11 @@ class BogoSender(Sender):
                 pass
 
 
+BUFF = 256
+MSS = 250
+
+
 class TheBestSender(BogoSender):
-    BUFF = 256
-    MSS = 250
     PCKG = 0
     while seqnum == (BUFF - MSS):
         seqnum = random.randint(0, 255)
@@ -85,6 +87,19 @@ class Segment(object):
     @staticmethod
     def seqnum(self, prevSeqNum, data, MSS):
         return (prevSeqNum + MSS)%256
+
+
+    @staticmethod
+    def acknum(self, isSender):
+        return 0 if isSender else (self.seqnum + MSS)
+
+    @staticmethod
+    def checkSum(self, data):
+        byteData = bytearray(data)
+        xorSum = 0
+        for i in xrange(len(byteData)):
+            xorSum = byteData[i] ^ xorSum
+        return xorSum
 
 
 if __name__ == "__main__":
