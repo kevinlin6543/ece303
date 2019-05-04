@@ -48,8 +48,7 @@ MSS = 250
 
 class TheBestSender(BogoSender):
     PCKG = 0
-    while seqnum == (BUFF - MSS):
-        seqnum = random.randint(0, 255)
+    seqnum = random.randint(0, 255)
     j = 0
     k = MSS
     copyCount = 0
@@ -66,15 +65,66 @@ class TheBestSender(BogoSender):
     def send(self, data):
         self.logger.info(
             "Sending on port: {} and waiting for ACK on port: {}".format(self.outbound_port, self.inbound_port))
+        for seg in self.splitter(self.TEST_DATA, self.MSS, self.PCKG):
+            try:
+                if not self.resend:
+                    segment = Segment(checksum=0, seqnum=0, acknum=0, data=seg)
+                    segment.seqnum = Segment.seqnum(self, self.seqnum, seg, self.MSS)
+                    self.seqnum = segment.seqnum
+                    segment.acknum = Segment.acknum(self, 1)
+                    byteArray = bytearray([segment.checksum, segment.acknum, segment.seqnum])
+                    byteArray += seg
+                    segment.checksum = Segment.checkSum(self, byteArray)
+                    byteArray[0] = segment.checksum  # update checksum to new calculated value
+                    self.simulator.u_send(byteArray)
+                while True:
+                    receivedByteArray = self.simulator.u_receive()
 
-    def checkCheckSum(self, data):  # this function calulates the checkSum of the RECEIVED data
-        xorSum = ~data[0]  # checkSum is at data[0]
-        for i in xrange(1, len(data)):
-            xorSum ^= data[i]
-        if xorSum == -1:  # if xorSum is 11111111, the data is not corrupted
-            return True
-        else:
-            return False
+                    if self.checkCheckSum(receivedByteArray):  # ack not corrupted
+                        if len(receivedByteArray) == 3 or receivedByteArray[1] == self.seqnum:
+                            self.packageSent = True
+                            self.simulator.u_send(byteArray)
+                        elif receivedByteArray[1] == (self.seqnum + len(seg)) % 256:  # no error
+                            self.dupCount = 0
+                            if self.timeout > 0.1:
+                                self.timeout -= 0.1
+                            self.simulator.sndr_socket.settimeout(self.timeout)
+                            self.resend = False
+                            break
+                        else:  # error
+                            self.simulator.u_send(byteArray)  # resend data
+                    else:
+                        self.simulator.u_send(byteArray)  # resend data
+                        self.dupCount += 1
+                        if self.dupCount == 3 and self.packageSent:
+                            self.timeout *= 2
+                            self.simulator.sndr_socket.settimeout(self.timeout)
+                            self.dupCount = 0
+                            if self.timeout > 10:
+                                print("Timeout has occurred!")
+                                exit()
+
+            except socket.timeout:
+                self.resend = True
+                self.simulator.u_send(byteArray)
+                self.dupCount += 1
+                if self.dupCount >= 3:
+                    self.dupCount = 0
+                    self.timeout *= 2
+                    self.simulator.sndr_socket.settimeout(self.timeout)
+                    if self.timeout > 10:
+                        print("Timeout has occurred!")
+                        exit()
+
+
+    def checkCheckSum(self, data):
+            xorSum = ~data[0]
+            for i in xrange(1, len(data)):
+                xorSum ^= data[i]
+            if xorSum == -1:
+                return True
+            else:
+                return False
 
 
 class Segment(object):
@@ -105,5 +155,5 @@ class Segment(object):
 if __name__ == "__main__":
     # test out BogoSender
     DATA = bytearray(sys.stdin.read())
-    sndr = BogoSender()
+    sndr = TheBestSender()
     sndr.send(DATA)
