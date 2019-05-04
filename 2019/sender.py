@@ -2,10 +2,11 @@
 
 import logging
 import socket
-
 import channelsimulator
 import utils
 import sys
+import random
+
 
 class Sender(object):
 
@@ -39,6 +40,51 @@ class BogoSender(Sender):
                 break
             except socket.timeout:
                 pass
+
+
+class TheBestSender(BogoSender):
+    BUFF = 256
+    MSS = 250
+    PCKG = 0
+    while seqnum == (BUFF - MSS):
+        seqnum = random.randint(0, 255)
+    j = 0
+    k = MSS
+    copyCount = 0
+    pkgSent = False
+    resend = False
+
+    buf = bytearray(BUFF)
+    bufStart = seqnum
+    bufEnd = seqnum
+
+    def __init__(self):
+        super(TheBestSender, self).__init__()
+
+    def send(self, data):
+        self.logger.info(
+            "Sending on port: {} and waiting for ACK on port: {}".format(self.outbound_port, self.inbound_port))
+
+    def checkCheckSum(self, data):  # this function calulates the checkSum of the RECEIVED data
+        xorSum = ~data[0]  # checkSum is at data[0]
+        for i in xrange(1, len(data)):
+            xorSum ^= data[i]
+        if xorSum == -1:  # if xorSum is 11111111, the data is not corrupted
+            return True
+        else:
+            return False
+
+
+class Segment(object):
+    def __init__(self, checksum=0, seqnum=0, acknum=0, data=[]):
+        self.data = data
+        self.seqnum = seqnum
+        self.acknum = acknum
+        self.checksum = checksum
+
+    @staticmethod
+    def seqnum(self, prevSeqNum, data, MSS):
+        return (prevSeqNum + MSS)%256
 
 
 if __name__ == "__main__":

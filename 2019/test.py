@@ -1,7 +1,6 @@
 import logging
 import unittest
 from copy import deepcopy
-
 from channelsimulator import ChannelSimulator, slice_frames
 
 
